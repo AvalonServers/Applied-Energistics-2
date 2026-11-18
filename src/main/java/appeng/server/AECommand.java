@@ -19,6 +19,7 @@
 package appeng.server;
 
 
+import appeng.core.AELog;
 import com.google.common.base.Joiner;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
@@ -77,6 +78,10 @@ public final class AECommand extends CommandBase {
             } catch (final WrongUsageException wrong) {
                 throw wrong;
             } catch (final Throwable er) {
+                AELog.error(er, "Error executing AE2 command: " + er.getMessage());
+                for (final StackTraceElement e : er.getStackTrace())
+                    AELog.info("		" + e.getClassName() + '.' + e.getMethodName() + " (" + e.getLineNumber() + ')');
+
                 throw new WrongUsageException("commands.ae2.usage");
             }
         }

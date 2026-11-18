@@ -69,7 +69,7 @@ public class GridCacheWrapper implements IGridCache {
         return this.name;
     }
 
-    IGridCache getCache() {
+    public IGridCache getCache() {
         return this.myCache;
     }
 }

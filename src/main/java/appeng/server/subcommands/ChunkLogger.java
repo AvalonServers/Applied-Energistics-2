@@ -38,7 +38,7 @@ public class ChunkLogger implements ISubCommand {
     @SubscribeEvent
     public void onChunkLoadEvent(final ChunkEvent.Load event) {
         if (!event.getWorld().isRemote) {
-            AELog.info("Chunk Loaded:   " + event.getChunk().x + ", " + event.getChunk().z);
+            AELog.info("Chunk Loaded:   " + event.getChunk().x + ", " + event.getChunk().z + "   Dimension: DIM" + event.getWorld().provider.getDimension());
             this.displayStack();
         }
     }

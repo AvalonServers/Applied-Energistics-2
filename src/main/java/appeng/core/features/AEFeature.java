@@ -189,7 +189,8 @@ public enum AEFeature {
     MATTER_BALL("MatterBall", Constants.CATEGORY_COMPONENTS),
     CORES("Cores", Constants.CATEGORY_COMPONENTS),
 
-    CHUNK_LOGGER_TRACE("ChunkLoggerTrace", Constants.CATEGORY_COMMANDS, false);
+    CHUNK_LOGGER_TRACE("ChunkLoggerTrace", Constants.CATEGORY_COMMANDS, false),
+    DEBUGGER("Debugger", Constants.CATEGORY_COMMANDS);
 
     private final String key;
     private final String category;

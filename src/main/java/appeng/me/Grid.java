@@ -59,15 +59,15 @@ public class Grid implements IGrid {
         center.setGrid(this);
     }
 
-    int getPriority() {
+    public int getPriority() {
         return this.priority;
     }
 
-    IGridStorage getMyStorage() {
+    public IGridStorage getMyStorage() {
         return this.myStorage;
     }
 
-    Map<Class<? extends IGridCache>, GridCacheWrapper> getCaches() {
+    public Map<Class<? extends IGridCache>, GridCacheWrapper> getCaches() {
         return this.caches;
     }
 
