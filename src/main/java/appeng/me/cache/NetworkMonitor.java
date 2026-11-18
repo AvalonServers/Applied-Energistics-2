@@ -32,9 +32,13 @@ import appeng.api.storage.channels.IFluidStorageChannel;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEStack;
 import appeng.api.storage.data.IItemList;
+import appeng.core.AELog;
 import appeng.me.storage.ItemWatcher;
+import com.google.common.collect.Sets;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -46,6 +50,10 @@ public class NetworkMonitor<T extends IAEStack<T>> implements IMEMonitor<T> {
     @Nonnull
     private static final HashMap<IActionSource, LinkedList<NetworkMonitor<?>>> src2MonitorsMap = new HashMap<>();
     private static final Set<IActionSource> nestingSources = new HashSet<>();
+    /**
+     * Threads (digits stripped) that we already logged an off-thread storage change for, to avoid log spam.
+     */
+    private static final Set<String> OFF_THREAD_CALLERS = Sets.newConcurrentHashSet();
 
     protected boolean wasNested = false;
     protected boolean isNested = false;
@@ -178,7 +186,44 @@ public class NetworkMonitor<T extends IAEStack<T>> implements IMEMonitor<T> {
         }
     }
 
+    /**
+     * The cached list, listeners and watchers of this monitor may only be touched from the server thread, since
+     * {@link #forceUpdate()} iterates the cached list during the grid tick. Some addons inject into / extract from the
+     * network from their own threads, which used to race with that iteration and crash the server with a
+     * {@link ConcurrentModificationException} in {@link IItemList#resetStatus()}.
+     */
+    private static boolean isOffServerThread() {
+        final MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        return server != null && !server.isCallingFromMinecraftThread();
+    }
+
+    private static void deferToServerThread(final Runnable task) {
+        final String threadName = Thread.currentThread().getName();
+        if (OFF_THREAD_CALLERS.add(threadName.replaceAll("\\d+", "#"))) {
+            AELog.warn(new Throwable("Off-thread ME storage access"), "An ME network storage change was posted from thread '" + threadName
+                    + "' instead of the server thread. The update has been moved to the server thread, but the mod in this stack trace should be fixed.");
+        }
+
+        FMLCommonHandler.instance().getMinecraftServerInstance().addScheduledTask(task);
+    }
+
+    private static <T extends IAEStack<T>> List<T> copyOf(final Iterable<T> stacks) {
+        final List<T> copy = new ArrayList<>();
+        for (final T stack : stacks) {
+            if (stack != null) {
+                copy.add(stack.copy());
+            }
+        }
+        return copy;
+    }
+
     protected void updateCraftables(Iterable<T> input, IActionSource src) {
+        if (isOffServerThread()) {
+            final List<T> copy = copyOf(input);
+            deferToServerThread(() -> this.updateCraftables(copy, src));
+            return;
+        }
+
         for (final T changedItem : input) {
             if (changedItem.isCraftable()) {
                 this.cachedList.add(changedItem);
@@ -191,6 +236,13 @@ public class NetworkMonitor<T extends IAEStack<T>> implements IMEMonitor<T> {
     }
 
     protected void postChange(final boolean add, final Iterable<T> changes, final IActionSource src) {
+        if (isOffServerThread()) {
+            // Copy now: the caller may reuse its stacks, and postChange negates them in place when !add.
+            final List<T> copy = copyOf(changes);
+            deferToServerThread(() -> this.postChange(add, copy, src));
+            return;
+        }
+
         src2MonitorsMap.putIfAbsent(src, new LinkedList<>());
         if (src2MonitorsMap.get(src).contains(this)) {
             nestingSources.add(src);
